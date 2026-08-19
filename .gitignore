@@ -42,3 +42,6 @@ imgui.ini
 startup.txt
 trace*.txt
 *.raw
+
+
+vcpkg_installed/
