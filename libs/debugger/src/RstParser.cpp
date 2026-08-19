@@ -123,7 +123,7 @@ bool RstParser::Parse(const fs::path& rstFilePath) {
 }
 
 std::shared_ptr<Type> RstParser::FindType(const std::string& typeRefId,
-                                          std::optional<std::string> varName) {
+                                          std::optional<std::string> /*varName*/) {
     auto iter = m_typeIdToType.find(typeRefId);
 
     // If type isn't found, create an UnresolvedType in its stead. These will be resolved later.

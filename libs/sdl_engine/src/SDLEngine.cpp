@@ -3,6 +3,7 @@
 #include "GLRender.h"
 #include "GLUtil.h"
 #include "InputManager.h"
+#include "LaserOutput.h"
 #include "SDLAudioDriver.h"
 #include "SDLGameController.h"
 #include "SDLKeyboard.h"
@@ -181,12 +182,19 @@ public:
         m_options.Add<float>("volume", 0.5f);
         m_options.Add<bool>("vsync", false);
         m_options.Add<float>("brightnessCurve", 0.0f);
+        m_options.Add<bool>("laserOutputEnabled", false);
+        m_options.Add<std::string>("laserOutputHost", "127.0.0.1");
+        m_options.Add<int>("laserOutputPort", 12000);
         m_inputManager.AddOptions(m_options);
         m_options.SetFilePath(Paths::optionsFile);
         m_options.Load();
 
         // Init input mapping and device for each player from options
         m_inputManager.ReadOptions(m_options);
+
+        m_laserOutput.SetTarget(m_options.Get<std::string>("laserOutputHost"),
+                                m_options.Get<int>("laserOutputPort"));
+        m_laserOutput.SetEnabled(m_options.Get<bool>("laserOutputEnabled"));
 
         int windowX = m_options.Get<int>("windowX");
         if (windowX == -1)
@@ -320,8 +328,9 @@ public:
             ImGui_Render();
             SDL_GL_SwapWindow(m_window);
 
-            // Don't clear lines when paused
+            // Don't clear lines (or send a laser frame) when paused
             if (frameTime > 0) {
+                m_laserOutput.SendFrame(renderContext.lines);
                 renderContext.lines.clear();
             }
 
@@ -331,6 +340,7 @@ public:
 
         m_client->Shutdown();
 
+        m_laserOutput.Shutdown();
         m_audioDriver.Shutdown();
         m_glRender.Shutdown();
         ImGui_ImplSdlGL3_Shutdown();
@@ -527,6 +537,42 @@ private:
                     // engine client.
                     m_options.Set("brightnessCurve", brightnessCurve);
                     m_options.Save();
+                }
+
+                ImGui::Separator();
+                ImGui::Text("Laser Output");
+                {
+                    static bool laserEnabled = m_options.Get<bool>("laserOutputEnabled");
+                    static std::string laserHost = m_options.Get<std::string>("laserOutputHost");
+                    static int laserPort = m_options.Get<int>("laserOutputPort");
+                    static char laserHostBuf[64];
+                    static bool laserHostBufInit = false;
+                    if (!laserHostBufInit) {
+                        snprintf(laserHostBuf, sizeof(laserHostBuf), "%s", laserHost.c_str());
+                        laserHostBufInit = true;
+                    }
+
+                    bool laserSettingsChanged = false;
+
+                    if (ImGui::Checkbox("Enable laser output", &laserEnabled)) {
+                        laserSettingsChanged = true;
+                    }
+                    if (ImGui::InputText("Host", laserHostBuf, sizeof(laserHostBuf))) {
+                        laserSettingsChanged = true;
+                    }
+                    if (ImGui::InputInt("Port", &laserPort)) {
+                        laserSettingsChanged = true;
+                    }
+
+                    if (laserSettingsChanged) {
+                        laserHost = laserHostBuf;
+                        m_laserOutput.SetTarget(laserHost, laserPort);
+                        m_laserOutput.SetEnabled(laserEnabled);
+                        m_options.Set("laserOutputEnabled", laserEnabled);
+                        m_options.Set("laserOutputHost", laserHost);
+                        m_options.Set("laserOutputPort", laserPort);
+                        m_options.Save();
+                    }
                 }
 
                 ImGui::Separator();
@@ -805,6 +851,7 @@ private:
     InputManager m_inputManager;
     Options m_options;
     FrameTimer m_frameTimer;
+    LaserOutput m_laserOutput;
     bool m_paused[PauseSource::Size]{};
     bool m_turbo = false;
 };
