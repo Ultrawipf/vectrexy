@@ -30,24 +30,35 @@ All three BIOS images shipped in data/bios are byte-identical in this region.
     $F0FD  E0 38 0E 03          ; the four dash patterns (a set bit lights the beam)
     $F06F  LDA #$CC / STA $C829 ; a further dashed pattern, set after the logo loop
 
-The logo also pulses. Two 12-byte Print_List_hw blocks hold the same string at
-two different heights, and the boot loop alternates between them on bit 5 of
-the frame counter:
+The logo also pulses, and the mechanism is not what it looks like at a glance.
+Print_List_hw is a *loop* over consecutive entries, running until a zero byte:
 
-    $F046  LDA  $C826
-    $F049  LDU  #$F10C          ; block A
-    $F04C  BITA #$20
-    $F04E  BEQ  $F052
-    $F050  LEAU 12,U            ; ...or block B
-    $F052  JSR  $F385           ; Print_List_hw
+    $F385  LDA  ,U              ; entry point tests first
+    $F387  BNE  $F383
+    $F383  BSR  $F373           ; Print_Str_hwyx: consumes one h,w,y,x,string
+
+and the logo entries are contiguous:
 
     $F10C  F1 60 27 CF "VECTREX" 80   height -15, width 96, y 39, x -49
     $F118  F3 60 26 CF "VECTREX" 80   height -13, width 96, y 38, x -49
+    $F124  FC 60 DF E9 "GCE"     80   height  -4, ...
 
-On a phosphor screen that reads as the logo breathing. A laser bridge that
-accumulates more than one Vectrex redraw per output frame instead shows both
-sizes at once, i.e. doubled text. Forcing the BEQ to an unconditional BRA
-pins the logo to the taller block.
+so starting at $F10C prints BOTH VECTREX entries, and starting at $F118 prints
+only one. The boot loop alternates between the two on bit 5 of the frame
+counter:
+
+    $F046  LDA  $C826
+    $F049  LDU  #$F10C          ; two copies
+    $F04C  BITA #$20
+    $F04E  BEQ  $F052
+    $F050  LEAU 12,U            ; ...or one
+    $F052  JSR  $F385
+
+The pulse is therefore the logo alternating between one and two overlaid
+copies, not merely between two sizes. On a phosphor screen that reads as the
+logo flashing; a laser bridge accumulating more than one redraw per output
+frame just shows doubled text. Replacing the BEQ with two NOPs always falls
+through to the LEAU, pinning the logo to a single copy.
 
 The patches
 -----------
@@ -115,9 +126,10 @@ def patch(data: bytearray, variant: str, pin_logo_size: bool = True) -> bytearra
             data[_offset(BORDER_DRAW_JSR) + i] = 0x12  # NOP
 
     if pin_logo_size:
-        # BEQ -> BRA: always take the first Print_List_hw block, so the logo stops
-        # alternating between its two heights.
-        data[_offset(LOGO_SIZE_BEQ)] = 0x20
+        # Replace the BEQ with two NOPs so the LEAU always runs: the list then starts at the
+        # second entry and the logo is drawn once instead of twice.
+        data[_offset(LOGO_SIZE_BEQ)] = 0x12
+        data[_offset(LOGO_SIZE_BEQ) + 1] = 0x12
 
     return data
 

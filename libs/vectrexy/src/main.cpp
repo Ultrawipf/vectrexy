@@ -159,12 +159,21 @@ private:
         // engine hands them to the renderer and the laser output. Only on frames that will actually
         // be consumed and cleared - the engine keeps the line list around while paused, and
         // re-simplifying it every frame would progressively eat the picture.
-        if (frameTime > 0 && options.Get<bool>("mergeDashedLines")) {
+        // Merging and corner closing are independent. With a BIOS whose border is already solid
+        // there is nothing to merge, but the corners still need closing - the emulated beam only
+        // starts drawing once its ramp settles, so each edge stops short of the corner.
+        const bool mergeDashes = options.Get<bool>("mergeDashedLines");
+        const bool closeCorners = options.Get<bool>("closeCorners");
+        if (frameTime > 0 && (mergeDashes || closeCorners)) {
             LineSimplify::Params params;
             params.maxGap = options.Get<float>("mergeMaxGap");
             params.cornerJoinRadius = options.Get<float>("cornerJoinRadius");
             params.minCornerSegmentLength = options.Get<float>("cornerJoinMinLength");
-            LineSimplify::Simplify(renderContext.lines, params);
+
+            if (mergeDashes)
+                LineSimplify::MergeCollinearRuns(renderContext.lines, params);
+            if (closeCorners)
+                LineSimplify::JoinCorners(renderContext.lines, params);
         }
 
         m_emulator.FrameUpdate(frameTime);
