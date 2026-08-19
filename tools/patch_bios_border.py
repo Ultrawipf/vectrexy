@@ -30,11 +30,31 @@ All three BIOS images shipped in data/bios are byte-identical in this region.
     $F0FD  E0 38 0E 03          ; the four dash patterns (a set bit lights the beam)
     $F06F  LDA #$CC / STA $C829 ; a further dashed pattern, set after the logo loop
 
+The logo also pulses. Two 12-byte Print_List_hw blocks hold the same string at
+two different heights, and the boot loop alternates between them on bit 5 of
+the frame counter:
+
+    $F046  LDA  $C826
+    $F049  LDU  #$F10C          ; block A
+    $F04C  BITA #$20
+    $F04E  BEQ  $F052
+    $F050  LEAU 12,U            ; ...or block B
+    $F052  JSR  $F385           ; Print_List_hw
+
+    $F10C  F1 60 27 CF "VECTREX" 80   height -15, width 96, y 39, x -49
+    $F118  F3 60 26 CF "VECTREX" 80   height -13, width 96, y 38, x -49
+
+On a phosphor screen that reads as the logo breathing. A laser bridge that
+accumulates more than one Vectrex redraw per output frame instead shows both
+sizes at once, i.e. doubled text. Forcing the BEQ to an unconditional BRA
+pins the logo to the taller block.
+
 The patches
 -----------
   solid          pattern bytes -> $FF, so the beam stays lit: continuous lines
   single-border  additionally LDB #$02 -> #$01, drawing one rectangle not two
   no-border      additionally NOP out the JSR, drawing no rectangle at all
+  --keep-pulse   leave the logo alternating (it is pinned by default)
 
 Only the startup logo is affected; Mine Storm and everything after it are
 untouched (verified by comparing rendered gameplay frames).
@@ -56,12 +76,14 @@ PATTERN_TABLE = 0xF0FD      # 4 pattern bytes
 LATE_PATTERN_IMM = 0xF070   # operand of LDA #$CC
 BORDER_COUNT_IMM = 0xF034   # operand of LDB #$02
 BORDER_DRAW_JSR = 0xF05D    # JSR $F434, 3 bytes
+LOGO_SIZE_BEQ = 0xF04E      # BEQ that picks between the two logo blocks
 
 EXPECTED = {
     PATTERN_TABLE: bytes([0xE0, 0x38, 0x0E, 0x03]),
     LATE_PATTERN_IMM - 1: bytes([0x86, 0xCC]),
     BORDER_COUNT_IMM - 1: bytes([0xC6, 0x02]),
     BORDER_DRAW_JSR: bytes([0xBD, 0xF4, 0x34]),
+    LOGO_SIZE_BEQ: bytes([0x27, 0x02]),
 }
 
 VARIANTS = ("solid", "single-border", "no-border")
@@ -71,7 +93,7 @@ def _offset(address):
     return address - ROM_BASE
 
 
-def patch(data: bytearray, variant: str) -> bytearray:
+def patch(data: bytearray, variant: str, pin_logo_size: bool = True) -> bytearray:
     for address, expected in EXPECTED.items():
         start = _offset(address)
         actual = bytes(data[start:start + len(expected)])
@@ -92,6 +114,11 @@ def patch(data: bytearray, variant: str) -> bytearray:
         for i in range(3):
             data[_offset(BORDER_DRAW_JSR) + i] = 0x12  # NOP
 
+    if pin_logo_size:
+        # BEQ -> BRA: always take the first Print_List_hw block, so the logo stops
+        # alternating between its two heights.
+        data[_offset(LOGO_SIZE_BEQ)] = 0x20
+
     return data
 
 
@@ -104,13 +131,17 @@ def main():
                         help="solid: keep both rectangles, just undash them. "
                              "single-border (default): one rectangle. "
                              "no-border: none at all.")
+    parser.add_argument("--keep-pulse", action="store_true",
+                        help="Leave the startup logo alternating between its two heights. By "
+                             "default it is pinned to the taller one, because a laser bridge that "
+                             "accumulates several redraws per frame shows both at once.")
     args = parser.parse_args()
 
     original = args.input.read_bytes()
     if len(original) != ROM_SIZE:
         raise SystemExit(f"{args.input} is {len(original)} bytes, expected {ROM_SIZE}")
 
-    data = patch(bytearray(original), args.variant)
+    data = patch(bytearray(original), args.variant, pin_logo_size=not args.keep_pulse)
     args.output.write_bytes(bytes(data))
 
     changed = sum(1 for a, b in zip(original, data) if a != b)

@@ -189,8 +189,9 @@ public:
         // 2 = both, for calibrating stroke placement against the real thing
         m_options.Add<int>("biosTextMode", 0);
         m_options.Add<bool>("mergeDashedLines", false);
-        m_options.Add<float>("mergeMaxGap", 8.0f);
+        m_options.Add<float>("mergeMaxGap", 12.0f);
         m_options.Add<float>("cornerJoinRadius", 4.0f);
+        m_options.Add<float>("cornerJoinMinLength", 24.0f);
         m_inputManager.AddOptions(m_options);
         m_options.SetFilePath(Paths::optionsFile);
         m_options.Load();
@@ -619,6 +620,16 @@ private:
                     ImGui::SliderFloat("Corner join radius", &cornerJoinRadius, 0.f, 12.f);
                     if (cornerJoinRadius != m_options.Get<float>("cornerJoinRadius")) {
                         m_options.Set("cornerJoinRadius", cornerJoinRadius);
+                        m_options.Save();
+                    }
+
+                    // Keeps corner joining on the long border edges and away from text and small
+                    // game geometry, where nudging endpoints reads as distortion.
+                    static float cornerJoinMinLength =
+                        m_options.Get<float>("cornerJoinMinLength");
+                    ImGui::SliderFloat("Corner join min length", &cornerJoinMinLength, 0.f, 64.f);
+                    if (cornerJoinMinLength != m_options.Get<float>("cornerJoinMinLength")) {
+                        m_options.Set("cornerJoinMinLength", cornerJoinMinLength);
                         m_options.Save();
                     }
                 }

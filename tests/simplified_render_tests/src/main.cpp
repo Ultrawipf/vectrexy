@@ -275,6 +275,23 @@ int main(int argc, char** argv) {
         Check(LineSimplify::JoinCorners(lines, params) == 0, "Distant endpoints are not joined");
     }
 
+    // Short segments - text strokes and small game geometry - must be left alone even when they
+    // form a perfectly good corner. Nudging those is what reads as distortion in glyphs.
+    {
+        std::vector<Line> lines;
+        lines.push_back(Line{{0.f, 0.f}, {6.f, 0.f}, 1.f});
+        lines.push_back(Line{{7.f, -1.f}, {7.f, -9.f}, 1.f});
+        LineSimplify::Params params;
+        Check(LineSimplify::JoinCorners(lines, params) == 0,
+              "Short segments (text-sized) are never corner-joined");
+        // ...but the same corner on border-length segments is
+        std::vector<Line> longLines;
+        longLines.push_back(Line{{0.f, 0.f}, {60.f, 0.f}, 1.f});
+        longLines.push_back(Line{{61.f, -1.f}, {61.f, -90.f}, 1.f});
+        Check(LineSimplify::JoinCorners(longLines, params) == 1,
+              "Border-length segments at the same corner are joined");
+    }
+
     // Near-parallel segments have an ill-conditioned intersection and must be left alone.
     {
         std::vector<Line> lines;
