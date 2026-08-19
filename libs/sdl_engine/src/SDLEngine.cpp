@@ -515,9 +515,11 @@ private:
                 ImGui::Text("System");
                 // Bios
                 {
-                    static const std::array<const char*, 3> items{"Normal", "Fast", "Skip"};
-                    static const std::array<fs::path, 3> biosFiles{
-                        Paths::biosRomFile, Paths::biosRomFastFile, Paths::biosRomSkipFile};
+                    static const std::array<const char*, 4> items{"Normal", "Fast", "Skip",
+                                                                 "Laser (solid border)"};
+                    static const std::array<fs::path, 4> biosFiles{
+                        Paths::biosRomFile, Paths::biosRomFastFile, Paths::biosRomSkipFile,
+                        Paths::biosRomLaserFile};
 
                     auto currBiosFile = m_options.Get<std::string>("biosRomFile");
                     int index = find_index_of(biosFiles, currBiosFile, 0);
