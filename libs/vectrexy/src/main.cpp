@@ -163,6 +163,7 @@ private:
             LineSimplify::Params params;
             params.maxGap = options.Get<float>("mergeMaxGap");
             params.cornerJoinRadius = options.Get<float>("cornerJoinRadius");
+            params.minCornerSegmentLength = options.Get<float>("cornerJoinMinLength");
             LineSimplify::Simplify(renderContext.lines, params);
         }
 

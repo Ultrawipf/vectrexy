@@ -22,9 +22,12 @@ namespace LineSimplify {
 
     struct Params {
         // All distances are in beam space, i.e. the ~256-unit-wide grid that Screen produces.
-        // Largest blanked gap that still counts as one line. The startup border's dashes measure
-        // 4.5 to 7.5 units apart, so anything much below this leaves it dashed.
-        float maxGap = 8.0f;
+        // Largest blanked gap that still counts as one line. Sweeping this against a real startup
+        // frame, the line count falls away steeply up to about 12 and is flat past it (1973 raw ->
+        // 643 at a gap of 8, 246 at 12, 234 at 16), so 12 is where the dashed border actually
+        // becomes whole edges. Leaving it lower merges the dashes only partially, which then
+        // starves the corner join below of segments long enough to qualify.
+        float maxGap = 12.0f;
         float minCosAngle = 0.999f;       // ~2.5 degrees of direction change allowed
         float maxPerpOffset = 0.75f;      // Keeps parallel-but-offset segments apart
         float maxBrightnessDelta = 0.25f; // Don't weld segments of visibly different brightness
@@ -36,9 +39,15 @@ namespace LineSimplify {
         bool absorbCollinearDots = true;
 
         // Corner closing. Zero disables it.
-        float cornerJoinRadius = 4.0f;        // How far an endpoint may be moved to close a corner
-        float minCornerSegmentLength = 3.0f;  // Ignore noise when looking for corners
-        float minCornerAngleDeg = 20.0f;      // Below this the intersection is ill-conditioned
+        float cornerJoinRadius = 4.0f;   // How far an endpoint may be moved to close a corner
+        float minCornerAngleDeg = 20.0f; // Below this the intersection is ill-conditioned
+
+        // Only segments at least this long are considered for corner joining. This is what keeps
+        // the pass away from text and small game geometry, which have plenty of legitimate near
+        // misses that should stay as they are - nudging those is what reads as distortion. The
+        // gap being fixed is on the screen borders, whose edges run 148 to 218 units, whereas a
+        // glyph stroke is under 18 and Mine Storm's asteroid edges are under 17.
+        float minCornerSegmentLength = 24.0f;
     };
 
     // Merges runs of near-collinear lines in place, preserving order. Returns the number of lines
