@@ -1,4 +1,5 @@
 #include "core/Base.h"
+#include "core/LineSimplify.h"
 #include "core/Platform.h"
 #include "debugger/DapDebugger.h"
 #include "debugger/Debugger.h"
@@ -151,6 +152,18 @@ private:
 
         // Send option-based values
         m_emulator.GetVia().GetScreen().SetBrightnessCurve(options.Get<float>("brightnessCurve"));
+        m_emulator.GetBiosTextHook().SetMode(
+            static_cast<BiosTextHook::Mode>(options.Get<int>("biosTextMode")));
+
+        // Simplify the frame's vectors now that emulation has produced all of them, and before the
+        // engine hands them to the renderer and the laser output. Only on frames that will actually
+        // be consumed and cleared - the engine keeps the line list around while paused, and
+        // re-simplifying it every frame would progressively eat the picture.
+        if (frameTime > 0 && options.Get<bool>("mergeDashedLines")) {
+            LineSimplify::Params params;
+            params.maxGap = options.Get<float>("mergeMaxGap");
+            LineSimplify::MergeCollinearRuns(renderContext.lines, params);
+        }
 
         m_emulator.FrameUpdate(frameTime);
 

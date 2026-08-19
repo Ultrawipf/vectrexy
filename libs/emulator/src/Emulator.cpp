@@ -26,10 +26,17 @@ void Emulator::Reset() {
 
     m_cpu.Reset();
     m_via.Reset();
+
+    // A reset part-way through a BIOS print would otherwise leave the screen suppressed
+    m_biosTextHook.Reset();
+    m_via.GetScreen().SetSuppressLineOutput(false);
 }
 
 bool Emulator::LoadBios(const char* file) {
-    return m_biosRom.LoadBiosRom(file);
+    const bool result = m_biosRom.LoadBiosRom(file);
+    // The text hook only works on a BIOS whose Print_Str sits where we expect it
+    m_biosTextHook.ValidateBios(m_memoryBus);
+    return result;
 }
 
 bool Emulator::LoadRom(const char* file) {
@@ -39,6 +46,10 @@ bool Emulator::LoadRom(const char* file) {
 cycles_t Emulator::ExecuteInstruction(const Input& input, RenderContext& renderContext,
                                       AudioContext& audioContext) {
     m_via.SetSyncContext(input, renderContext, audioContext);
+
+    // Purely observational: reads registers and memory, and may append lines or gate Screen's line
+    // output. Never writes emulated state, so this is invisible to the running program.
+    m_biosTextHook.PreExecuteInstruction(m_cpu, m_memoryBus, m_via.GetScreen(), renderContext);
 
     cycles_t cpuCycles = m_cpu.ExecuteInstruction(m_via.IrqEnabled(), m_via.FirqEnabled());
 
@@ -50,4 +61,5 @@ cycles_t Emulator::ExecuteInstruction(const Input& input, RenderContext& renderC
 
 void Emulator::FrameUpdate(double frameTime) {
     m_via.FrameUpdate(frameTime);
+    m_biosTextHook.FrameUpdate();
 }
