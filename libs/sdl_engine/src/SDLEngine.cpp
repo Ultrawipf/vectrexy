@@ -189,6 +189,7 @@ public:
         // 2 = both, for calibrating stroke placement against the real thing
         m_options.Add<int>("biosTextMode", 0);
         m_options.Add<bool>("mergeDashedLines", false);
+        m_options.Add<bool>("closeCorners", false);
         m_options.Add<float>("mergeMaxGap", 12.0f);
         m_options.Add<float>("cornerJoinRadius", 4.0f);
         m_options.Add<float>("cornerJoinMinLength", 24.0f);
@@ -614,8 +615,16 @@ private:
                         m_options.Save();
                     }
 
-                    // Closes the notch the beam leaves at a corner, which merging alone cannot do
-                    // because the two edges meeting there aren't collinear. Zero disables it.
+                    // Independent of merging: a solid border still needs its corners closed,
+                    // because the emulated beam only draws once its ramp settles and so stops
+                    // short at each corner.
+                    static bool closeCorners = m_options.Get<bool>("closeCorners");
+                    ImGui::Checkbox("Close corners", &closeCorners);
+                    if (closeCorners != m_options.Get<bool>("closeCorners")) {
+                        m_options.Set("closeCorners", closeCorners);
+                        m_options.Save();
+                    }
+
                     static float cornerJoinRadius = m_options.Get<float>("cornerJoinRadius");
                     ImGui::SliderFloat("Corner join radius", &cornerJoinRadius, 0.f, 12.f);
                     if (cornerJoinRadius != m_options.Get<float>("cornerJoinRadius")) {
