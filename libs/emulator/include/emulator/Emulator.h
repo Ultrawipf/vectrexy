@@ -2,6 +2,7 @@
 
 #include "core/Base.h"
 #include "emulator/BiosRom.h"
+#include "emulator/BiosTextHook.h"
 #include "emulator/Cartridge.h"
 #include "emulator/Cpu.h"
 #include "emulator/DevMemoryDevice.h"
@@ -26,6 +27,7 @@ public:
     Cpu& GetCpu() { return m_cpu; }
     Ram& GetRam() { return m_ram; }
     Via& GetVia() { return m_via; }
+    BiosTextHook& GetBiosTextHook() { return m_biosTextHook; }
 
 private:
     MemoryBus m_memoryBus;
@@ -36,6 +38,7 @@ private:
     IllegalMemoryDevice m_illegal;
     UnmappedMemoryDevice m_unmapped;
     DevMemoryDevice m_dev;
+    BiosTextHook m_biosTextHook;
 
     Cartridge m_cartridge;
 };

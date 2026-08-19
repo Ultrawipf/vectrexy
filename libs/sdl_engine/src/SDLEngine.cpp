@@ -185,6 +185,11 @@ public:
         m_options.Add<bool>("laserOutputEnabled", false);
         m_options.Add<std::string>("laserOutputHost", "127.0.0.1");
         m_options.Add<int>("laserOutputPort", 12000);
+        // Simplified rendering: 0 = off (authentic BIOS bitmap text), 1 = stroke text only,
+        // 2 = both, for calibrating stroke placement against the real thing
+        m_options.Add<int>("biosTextMode", 0);
+        m_options.Add<bool>("mergeDashedLines", false);
+        m_options.Add<float>("mergeMaxGap", 3.0f);
         m_inputManager.AddOptions(m_options);
         m_options.SetFilePath(Paths::optionsFile);
         m_options.Load();
@@ -571,6 +576,37 @@ private:
                         m_options.Set("laserOutputEnabled", laserEnabled);
                         m_options.Set("laserOutputHost", laserHost);
                         m_options.Set("laserOutputPort", laserPort);
+                        m_options.Save();
+                    }
+                }
+
+                ImGui::Separator();
+                ImGui::Text("Simplified Rendering");
+                {
+                    // Laser-friendly output: stroke text instead of the BIOS's bitmap font, and
+                    // dashed lines stitched back into continuous ones. Both are off by default,
+                    // since either one makes the picture stop looking like a real Vectrex.
+                    static int biosTextMode = m_options.Get<int>("biosTextMode");
+                    const char* biosTextModeNames[] = {"Off (BIOS bitmap text)", "Stroke text",
+                                                       "Both (calibration)"};
+                    ImGui::Combo("Text", &biosTextMode, biosTextModeNames,
+                                 IM_ARRAYSIZE(biosTextModeNames));
+                    if (biosTextMode != m_options.Get<int>("biosTextMode")) {
+                        m_options.Set("biosTextMode", biosTextMode);
+                        m_options.Save();
+                    }
+
+                    static bool mergeDashedLines = m_options.Get<bool>("mergeDashedLines");
+                    ImGui::Checkbox("Merge dashed lines", &mergeDashedLines);
+                    if (mergeDashedLines != m_options.Get<bool>("mergeDashedLines")) {
+                        m_options.Set("mergeDashedLines", mergeDashedLines);
+                        m_options.Save();
+                    }
+
+                    static float mergeMaxGap = m_options.Get<float>("mergeMaxGap");
+                    ImGui::SliderFloat("Merge max gap", &mergeMaxGap, 0.f, 16.f);
+                    if (mergeMaxGap != m_options.Get<float>("mergeMaxGap")) {
+                        m_options.Set("mergeMaxGap", mergeMaxGap);
                         m_options.Save();
                     }
                 }

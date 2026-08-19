@@ -79,7 +79,8 @@ void Screen::Update(cycles_t cycles, RenderContext& renderContext) {
     }
 
     // We might draw even when integrators are disabled (e.g. drawing dots)
-    bool drawingEnabled = !m_blank && (m_brightness > 0.f && m_brightness <= 128.f);
+    bool drawingEnabled =
+        !m_suppressLineOutput && !m_blank && (m_brightness > 0.f && m_brightness <= 128.f);
     if (drawingEnabled) {
         if (m_lastDrawingEnabled && (Magnitude(m_lastDir) > 0.f) && (m_lastDir == currDir) &&
             !renderContext.lines.empty()) {
