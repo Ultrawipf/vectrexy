@@ -162,7 +162,8 @@ private:
         if (frameTime > 0 && options.Get<bool>("mergeDashedLines")) {
             LineSimplify::Params params;
             params.maxGap = options.Get<float>("mergeMaxGap");
-            LineSimplify::MergeCollinearRuns(renderContext.lines, params);
+            params.cornerJoinRadius = options.Get<float>("cornerJoinRadius");
+            LineSimplify::Simplify(renderContext.lines, params);
         }
 
         m_emulator.FrameUpdate(frameTime);

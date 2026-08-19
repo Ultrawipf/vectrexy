@@ -189,7 +189,8 @@ public:
         // 2 = both, for calibrating stroke placement against the real thing
         m_options.Add<int>("biosTextMode", 0);
         m_options.Add<bool>("mergeDashedLines", false);
-        m_options.Add<float>("mergeMaxGap", 3.0f);
+        m_options.Add<float>("mergeMaxGap", 8.0f);
+        m_options.Add<float>("cornerJoinRadius", 4.0f);
         m_inputManager.AddOptions(m_options);
         m_options.SetFilePath(Paths::optionsFile);
         m_options.Load();
@@ -604,9 +605,18 @@ private:
                     }
 
                     static float mergeMaxGap = m_options.Get<float>("mergeMaxGap");
-                    ImGui::SliderFloat("Merge max gap", &mergeMaxGap, 0.f, 16.f);
+                    ImGui::SliderFloat("Merge max gap", &mergeMaxGap, 0.f, 24.f);
                     if (mergeMaxGap != m_options.Get<float>("mergeMaxGap")) {
                         m_options.Set("mergeMaxGap", mergeMaxGap);
+                        m_options.Save();
+                    }
+
+                    // Closes the notch the beam leaves at a corner, which merging alone cannot do
+                    // because the two edges meeting there aren't collinear. Zero disables it.
+                    static float cornerJoinRadius = m_options.Get<float>("cornerJoinRadius");
+                    ImGui::SliderFloat("Corner join radius", &cornerJoinRadius, 0.f, 12.f);
+                    if (cornerJoinRadius != m_options.Get<float>("cornerJoinRadius")) {
+                        m_options.Set("cornerJoinRadius", cornerJoinRadius);
                         m_options.Save();
                     }
                 }

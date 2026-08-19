@@ -12,19 +12,45 @@
 // phosphor screen, but a laser projector exaggerates every gap. Since the beam traverses such a run
 // in one continuous sweep, its dashes end up as *adjacent* entries in the line list, which is what
 // lets a single forward pass stitch them back into one line.
+//
+// Stitching the straight runs is not enough on its own. Measured on the startup border, each edge
+// stops about 1.7 units short of the true corner - the beam decelerates through the turn - so two
+// perpendicular runs never actually meet and every corner is left with an L-shaped notch. No gap
+// threshold can close that, because the two runs aren't collinear. JoinCorners handles it by
+// snapping endpoints that are near each other onto the intersection of the two lines.
 namespace LineSimplify {
 
     struct Params {
         // All distances are in beam space, i.e. the ~256-unit-wide grid that Screen produces.
-        float maxGap = 3.0f;               // Largest blanked gap that still counts as one line
-        float minCosAngle = 0.999f;        // ~2.5 degrees of direction change allowed
-        float maxPerpOffset = 0.75f;       // Keeps parallel-but-offset segments apart
-        float maxBrightnessDelta = 0.25f;  // Don't weld segments of visibly different brightness
-        bool mergeZeroLengthLines = false; // Vectrex dots are meaningful; leave them be
+        // Largest blanked gap that still counts as one line. The startup border's dashes measure
+        // 4.5 to 7.5 units apart, so anything much below this leaves it dashed.
+        float maxGap = 8.0f;
+        float minCosAngle = 0.999f;       // ~2.5 degrees of direction change allowed
+        float maxPerpOffset = 0.75f;      // Keeps parallel-but-offset segments apart
+        float maxBrightnessDelta = 0.25f; // Don't weld segments of visibly different brightness
+
+        // The beam leaves a zero-length "dot" at each end of a swept edge, where it comes to rest
+        // before turning. Those dots read as part of the edge, and leaving them out stops a run
+        // short of its own end. When set, a dot that is adjacent to and collinear with a run is
+        // absorbed into it. Dots that aren't part of a run - real dot artwork - are untouched.
+        bool absorbCollinearDots = true;
+
+        // Corner closing. Zero disables it.
+        float cornerJoinRadius = 4.0f;        // How far an endpoint may be moved to close a corner
+        float minCornerSegmentLength = 3.0f;  // Ignore noise when looking for corners
+        float minCornerAngleDeg = 20.0f;      // Below this the intersection is ill-conditioned
     };
 
     // Merges runs of near-collinear lines in place, preserving order. Returns the number of lines
     // removed.
     size_t MergeCollinearRuns(std::vector<Line>& lines, const Params& params);
+
+    // Snaps pairs of nearby endpoints belonging to non-parallel segments onto the intersection of
+    // those segments, closing the notch the beam leaves at a corner. Returns the number of corners
+    // joined. Order and line count are unchanged; only endpoints move.
+    size_t JoinCorners(std::vector<Line>& lines, const Params& params);
+
+    // MergeCollinearRuns followed by JoinCorners. This is what callers normally want.
+    void Simplify(std::vector<Line>& lines, const Params& params);
 
 } // namespace LineSimplify
