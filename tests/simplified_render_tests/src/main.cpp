@@ -90,6 +90,44 @@ namespace {
         return result;
     }
 
+    // Grabs one frame of the startup screen, which is where the dashed double border lives.
+    std::vector<Line> CaptureStartupBorderFrame(const char* biosPath) {
+        Emulator emulator;
+        emulator.Init(biosPath);
+        emulator.Reset();
+        emulator.GetRam().Zero();
+
+        Input input;
+        RenderContext renderContext;
+        AudioContext audioContext{100.f};
+
+        for (size_t i = 0; i < 540'000; ++i) {
+            emulator.ExecuteInstruction(input, renderContext, audioContext);
+            if (renderContext.lines.size() > 100000)
+                renderContext.lines.clear();
+        }
+        renderContext.lines.clear();
+        for (size_t i = 0; i < 40'000; ++i)
+            emulator.ExecuteInstruction(input, renderContext, audioContext);
+        return renderContext.lines;
+    }
+
+    // Counts endpoints that sit exactly on another segment's endpoint - i.e. closed corners.
+    size_t CountClosedCorners(const std::vector<Line>& lines) {
+        size_t closed = 0;
+        for (size_t i = 0; i < lines.size(); ++i) {
+            for (size_t j = i + 1; j < lines.size(); ++j) {
+                for (const auto& a : {lines[i].p0, lines[i].p1}) {
+                    for (const auto& b : {lines[j].p0, lines[j].p1}) {
+                        if (Magnitude(a - b) < 1e-4f)
+                            ++closed;
+                    }
+                }
+            }
+        }
+        return closed;
+    }
+
     int failures = 0;
     void Check(bool condition, const char* what) {
         printf("[%s] %s\n", condition ? " OK " : "FAIL", what);
@@ -182,16 +220,90 @@ int main(int argc, char** argv) {
         Check(lines[1].p0.y == 20.f, "Offset parallel run kept separate");
     }
 
-    // Dots must survive
+    // Isolated dot artwork must survive: spaced apart, so no dot is adjacent to a run.
     {
         std::vector<Line> lines;
         for (int i = 0; i < 5; ++i) {
-            const float x = static_cast<float>(i) * 2.f;
+            const float x = static_cast<float>(i) * 8.f;
             lines.push_back(Line{{x, 5.f}, {x, 5.f}, 1.f});
         }
         LineSimplify::Params params;
         LineSimplify::MergeCollinearRuns(lines, params);
-        Check(lines.size() == 5, "Zero-length dots are preserved");
+        Check(lines.size() == 5, "Isolated dots are preserved");
+    }
+
+    // The beam parks a zero-length dot at each end of a swept edge. Those belong to the edge, and
+    // leaving them out is what stopped runs short of the corner.
+    {
+        std::vector<Line> lines;
+        lines.push_back(Line{{1.5f, 0.f}, {1.5f, 0.f}, 1.f}); // leading dot
+        for (int i = 1; i < 5; ++i) {
+            const float x = static_cast<float>(i) * 4.f;
+            lines.push_back(Line{{x, 0.f}, {x + 3.f, 0.f}, 1.f});
+        }
+        lines.push_back(Line{{22.f, 0.f}, {22.f, 0.f}, 1.f}); // trailing dot
+        LineSimplify::Params params;
+        LineSimplify::MergeCollinearRuns(lines, params);
+        Check(lines.size() == 1, "Edge end-dots are absorbed into the run");
+        Check(lines.size() == 1 && lines[0].p0.x == 1.5f && lines[0].p1.x == 22.f,
+              "Run spans from the leading dot to the trailing dot");
+    }
+
+    // Corner closing: two perpendicular runs that both stop short of the corner, as the real
+    // startup border does. Merging cannot fix this; JoinCorners must.
+    {
+        std::vector<Line> lines;
+        lines.push_back(Line{{0.f, 0.f}, {30.f, 0.f}, 1.f});   // horizontal, stops short in x
+        lines.push_back(Line{{31.7f, -1.7f}, {31.7f, -40.f}, 1.f}); // vertical, starts below corner
+        LineSimplify::Params params;
+        const size_t joined = LineSimplify::JoinCorners(lines, params);
+        const bool meet = lines[0].p1.x == lines[1].p0.x && lines[0].p1.y == lines[1].p0.y;
+        printf("corner join: %zu corner(s), meet=%d at (%.2f,%.2f)\n", joined, (int)meet,
+               lines[0].p1.x, lines[0].p1.y);
+        Check(joined == 1, "Open corner is detected and joined");
+        Check(meet, "Both runs now share the exact corner point");
+        Check(std::abs(lines[0].p1.x - 31.7f) < 0.01f && std::abs(lines[0].p1.y - 0.f) < 0.01f,
+              "Corner lands on the intersection of the two edges");
+    }
+
+    // A corner join must not fabricate a long spike between two distant endpoints.
+    {
+        std::vector<Line> lines;
+        lines.push_back(Line{{0.f, 0.f}, {30.f, 0.f}, 1.f});
+        lines.push_back(Line{{60.f, -30.f}, {60.f, -80.f}, 1.f});
+        LineSimplify::Params params;
+        Check(LineSimplify::JoinCorners(lines, params) == 0, "Distant endpoints are not joined");
+    }
+
+    // Near-parallel segments have an ill-conditioned intersection and must be left alone.
+    {
+        std::vector<Line> lines;
+        lines.push_back(Line{{0.f, 0.f}, {30.f, 0.f}, 1.f});
+        lines.push_back(Line{{32.f, 1.f}, {62.f, 1.4f}, 1.f});
+        LineSimplify::Params params;
+        Check(LineSimplify::JoinCorners(lines, params) == 0, "Near-parallel ends are not joined");
+    }
+
+    // End-to-end on the real thing: the startup screen's dashed double border.
+    {
+        auto lines = CaptureStartupBorderFrame(biosPath);
+        const size_t rawCount = lines.size();
+        LineSimplify::Params params;
+        const size_t removed = LineSimplify::MergeCollinearRuns(lines, params);
+        const size_t cornersBefore = CountClosedCorners(lines);
+        const size_t joined = LineSimplify::JoinCorners(lines, params);
+        const size_t cornersAfter = CountClosedCorners(lines);
+
+        printf("\nstartup border: %zu raw -> %zu merged (removed %zu), corners closed %zu -> %zu "
+               "(%zu joins)\n",
+               rawCount, lines.size(), removed, cornersBefore, cornersAfter, joined);
+
+        Check(rawCount > 500, "Captured a populated startup frame");
+        // Measures ~70% at the default gap; assert 60% so normal variation doesn't trip it.
+        Check((rawCount - lines.size()) * 10 >= rawCount * 6,
+              "Merging removes at least 60% of the lines");
+        Check(joined >= 4, "Real border corners are detected and joined");
+        Check(cornersAfter > cornersBefore, "More corners meet exactly after joining");
     }
 
     printf("\n%s (%d failure(s))\n", failures == 0 ? "ALL CHECKS PASSED" : "CHECKS FAILED",
