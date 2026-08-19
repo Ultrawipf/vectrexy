@@ -31,6 +31,16 @@ inline bool operator==(const Vector2& lhs, const Vector2& rhs) {
     return lhs.x == rhs.x && lhs.y == rhs.y;
 }
 
+inline float Dot(const Vector2& lhs, const Vector2& rhs) {
+    return lhs.x * rhs.x + lhs.y * rhs.y;
+}
+
+// Z component of the 3D cross product of two vectors in the XY plane. Its magnitude is the area of
+// the parallelogram they span, which makes it a cheap way to get a perpendicular distance.
+inline float Cross(const Vector2& lhs, const Vector2& rhs) {
+    return lhs.x * rhs.y - lhs.y * rhs.x;
+}
+
 inline float Magnitude(const Vector2& v) {
     return ::sqrt(v.x * v.x + v.y * v.y);
 }

@@ -23,6 +23,18 @@ public:
 
     void SetBrightnessCurve(float v) { m_brightnessCurve = v; }
 
+    Vector2 GetBeamPos() const { return m_pos; }
+
+    // While suppressed, the beam keeps moving exactly as it would otherwise, but emits no lines.
+    // Used to hide the output of a BIOS routine we're replacing with our own vectors, without
+    // perturbing emulation in any way.
+    void SetSuppressLineOutput(bool enabled) { m_suppressLineOutput = enabled; }
+    bool IsLineOutputSuppressed() const { return m_suppressLineOutput; }
+
+    // Prevents the next drawn segment from extending the last line in the render context. Callers
+    // that append their own lines must use this, or the beam's next move will stretch one of them.
+    void BreakLineContinuity() { m_lastDrawingEnabled = false; }
+
 private:
     bool m_integratorsEnabled{};
     Vector2 m_pos;
@@ -39,4 +51,5 @@ private:
     int32_t m_rampDelay = 0;
 
     float m_brightnessCurve = 0.f; // Set externally
+    bool m_suppressLineOutput = false;
 };
