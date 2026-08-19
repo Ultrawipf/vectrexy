@@ -188,6 +188,54 @@ static void ImGui_ImplSdlGL3_SetClipboardText(void*, const char* text) {
     SDL_SetClipboardText(text);
 }
 
+// Maps the small set of keys this backend has ever cared about (navigation/editing keys used by
+// ImGui's text widgets, plus a few shortcut letters). ImGuiKey_None is returned for anything else,
+// which ImGui_ImplSdlGL3_ProcessEvent then ignores.
+static ImGuiKey ImGui_ImplSdlGL3_KeycodeToImGuiKey(SDL_Keycode keycode) {
+    switch (keycode) {
+    case SDLK_TAB:
+        return ImGuiKey_Tab;
+    case SDLK_LEFT:
+        return ImGuiKey_LeftArrow;
+    case SDLK_RIGHT:
+        return ImGuiKey_RightArrow;
+    case SDLK_UP:
+        return ImGuiKey_UpArrow;
+    case SDLK_DOWN:
+        return ImGuiKey_DownArrow;
+    case SDLK_PAGEUP:
+        return ImGuiKey_PageUp;
+    case SDLK_PAGEDOWN:
+        return ImGuiKey_PageDown;
+    case SDLK_HOME:
+        return ImGuiKey_Home;
+    case SDLK_END:
+        return ImGuiKey_End;
+    case SDLK_DELETE:
+        return ImGuiKey_Delete;
+    case SDLK_BACKSPACE:
+        return ImGuiKey_Backspace;
+    case SDLK_RETURN:
+        return ImGuiKey_Enter;
+    case SDLK_ESCAPE:
+        return ImGuiKey_Escape;
+    case SDLK_a:
+        return ImGuiKey_A;
+    case SDLK_c:
+        return ImGuiKey_C;
+    case SDLK_v:
+        return ImGuiKey_V;
+    case SDLK_x:
+        return ImGuiKey_X;
+    case SDLK_y:
+        return ImGuiKey_Y;
+    case SDLK_z:
+        return ImGuiKey_Z;
+    default:
+        return ImGuiKey_None;
+    }
+}
+
 // You can read the io.WantCaptureMouse, io.WantCaptureKeyboard flags to tell if dear imgui wants to
 // use your inputs. - When io.WantCaptureMouse is true, do not dispatch mouse input data to your
 // main application. - When io.WantCaptureKeyboard is true, do not dispatch keyboard input data to
@@ -218,8 +266,10 @@ bool ImGui_ImplSdlGL3_ProcessEvent(SDL_Event* event) {
     }
     case SDL_KEYDOWN:
     case SDL_KEYUP: {
-        int key = event->key.keysym.sym & ~SDLK_SCANCODE_MASK;
-        io.KeysDown[key] = (event->type == SDL_KEYDOWN);
+        ImGuiKey key = ImGui_ImplSdlGL3_KeycodeToImGuiKey(event->key.keysym.sym);
+        if (key != ImGuiKey_None) {
+            io.AddKeyEvent(key, event->type == SDL_KEYDOWN);
+        }
         io.KeyShift = ((SDL_GetModState() & KMOD_SHIFT) != 0);
         io.KeyCtrl = ((SDL_GetModState() & KMOD_CTRL) != 0);
         io.KeyAlt = ((SDL_GetModState() & KMOD_ALT) != 0);
@@ -251,7 +301,7 @@ void ImGui_ImplSdlGL3_CreateFontsTexture() {
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
 
     // Store our identifier
-    io.Fonts->TexID = (void*)(intptr_t)g_FontTexture;
+    io.Fonts->TexID = (ImTextureID)(intptr_t)g_FontTexture;
 
     // Restore state
     glBindTexture(GL_TEXTURE_2D, last_texture);
@@ -367,41 +417,14 @@ void ImGui_ImplSdlGL3_InvalidateDeviceObjects() {
 }
 
 bool ImGui_ImplSdlGL3_Init(SDL_Window* window) {
+    (void)window;
+
     ImGui::CreateContext();
     ImGuiIO& io = ImGui::GetIO();
-    io.KeyMap[ImGuiKey_Tab] = SDLK_TAB; // Keyboard mapping. ImGui will use those indices to peek
-                                        // into the io.KeyDown[] array.
-    io.KeyMap[ImGuiKey_LeftArrow] = SDL_SCANCODE_LEFT;
-    io.KeyMap[ImGuiKey_RightArrow] = SDL_SCANCODE_RIGHT;
-    io.KeyMap[ImGuiKey_UpArrow] = SDL_SCANCODE_UP;
-    io.KeyMap[ImGuiKey_DownArrow] = SDL_SCANCODE_DOWN;
-    io.KeyMap[ImGuiKey_PageUp] = SDL_SCANCODE_PAGEUP;
-    io.KeyMap[ImGuiKey_PageDown] = SDL_SCANCODE_PAGEDOWN;
-    io.KeyMap[ImGuiKey_Home] = SDL_SCANCODE_HOME;
-    io.KeyMap[ImGuiKey_End] = SDL_SCANCODE_END;
-    io.KeyMap[ImGuiKey_Delete] = SDLK_DELETE;
-    io.KeyMap[ImGuiKey_Backspace] = SDLK_BACKSPACE;
-    io.KeyMap[ImGuiKey_Enter] = SDLK_RETURN;
-    io.KeyMap[ImGuiKey_Escape] = SDLK_ESCAPE;
-    io.KeyMap[ImGuiKey_A] = SDLK_a;
-    io.KeyMap[ImGuiKey_C] = SDLK_c;
-    io.KeyMap[ImGuiKey_V] = SDLK_v;
-    io.KeyMap[ImGuiKey_X] = SDLK_x;
-    io.KeyMap[ImGuiKey_Y] = SDLK_y;
-    io.KeyMap[ImGuiKey_Z] = SDLK_z;
 
     io.SetClipboardTextFn = ImGui_ImplSdlGL3_SetClipboardText;
     io.GetClipboardTextFn = ImGui_ImplSdlGL3_GetClipboardText;
     io.ClipboardUserData = NULL;
-
-#ifdef _WIN32
-    SDL_SysWMinfo wmInfo;
-    SDL_VERSION(&wmInfo.version);
-    SDL_GetWindowWMInfo(window, &wmInfo);
-    io.ImeWindowHandle = wmInfo.info.win.window;
-#else
-    (void)window;
-#endif
 
     return true;
 }
