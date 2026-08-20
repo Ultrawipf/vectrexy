@@ -109,10 +109,18 @@ namespace {
             };
 
             uint8_t joystickIndex = checked_static_cast<uint8_t>(gp->joystickIndex);
-            auto& controller = gp->driver.get().ControllerByIndex(joystickIndex);
+            const GameController* controller = gp->driver.get().ControllerByIndex(joystickIndex);
+
+            // A player can be set to Gamepad with nothing plugged in - and that choice is saved,
+            // so it is restored on the next run before any gamepad can be connected. A connected
+            // pad can also be unplugged mid-game. In all of those the player simply has no input
+            // this frame; leave their part of `input` at rest rather than reading a device that
+            // isn't there.
+            if (!controller)
+                return;
 
             auto IsButtonDown = [&](GamepadInputMapping::Button button) {
-                return controller.GetButtonState(button).down;
+                return controller->GetButtonState(button).down;
             };
 
             input.SetButton(joystickIndex, 0, IsButtonDown(GamepadInputMapping::B1));
@@ -126,16 +134,16 @@ namespace {
                                                         IsButtonDown(GamepadInputMapping::Left),
                                                         IsButtonDown(GamepadInputMapping::Right)));
             } else {
-                input.SetAnalogAxisX(joystickIndex, remapAxisValue(controller.GetAxisValue(
+                input.SetAnalogAxisX(joystickIndex, remapAxisValue(controller->GetAxisValue(
                                                         GamepadInputMapping::AxisX)));
             }
 
             if (IsButtonDown(GamepadInputMapping::Down) || IsButtonDown(GamepadInputMapping::Up)) {
-                input.SetAnalogAxisX(
+                input.SetAnalogAxisY(
                     joystickIndex, remapDigitalToAxisValue(IsButtonDown(GamepadInputMapping::Down),
                                                            IsButtonDown(GamepadInputMapping::Up)));
             } else {
-                input.SetAnalogAxisX(joystickIndex, -remapAxisValue(controller.GetAxisValue(
+                input.SetAnalogAxisY(joystickIndex, -remapAxisValue(controller->GetAxisValue(
                                                         GamepadInputMapping::AxisY)));
             }
         }

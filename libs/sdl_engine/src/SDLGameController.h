@@ -40,6 +40,10 @@ private:
 
 class SDLGameControllerDriver {
 public:
+    // Most gamepads we track. AddController refuses anything beyond this, so an index is only
+    // ever in [0, MaxControllers).
+    static constexpr int MaxControllers = 2;
+
     // Call once per frame
     void PostFrameUpdateKeyStates();
 
@@ -49,8 +53,15 @@ public:
 
     bool IsControllerConnected(int index) const;
 
-    GameController& ControllerByInstanceId(int instanceId);
-    const GameController& ControllerByIndex(int index) const;
+    // Null when no such controller is connected.
+    //
+    // These deliberately return pointers rather than references: which controllers exist is
+    // driven by hotplug events and by a persisted user setting, so "no controller at this
+    // index" is a normal state that every caller has to handle, not a programming error. The
+    // earlier reference-returning versions asserted and then dereferenced a past-the-end
+    // iterator, which crashed the process in a release build.
+    GameController* ControllerByInstanceId(int instanceId);
+    const GameController* ControllerByIndex(int index) const;
 
 private:
     std::unordered_map<int, GameController> m_playerIndexToGamepad;
