@@ -70,11 +70,13 @@ packet is a 12-byte header followed by `lineCount` 20-byte line records:
 
 Each record, repeated `lineCount` times:
 
-| Offset | Type      | Field        | Notes                                        |
-| ------ | --------- | ------------ | --------------------------------------------- |
-| 0      | `float32` | `x0`, `y0`   | start point                                   |
-| 8      | `float32` | `x1`, `y1`   | end point                                     |
-| 16     | `float32` | `brightness` | `0..1`                                        |
+| Offset | Type      | Field        | Notes            |
+| ------ | --------- | ------------ | ---------------- |
+| 0      | `float32` | `x0`         | start point x    |
+| 4      | `float32` | `y0`         | start point y    |
+| 8      | `float32` | `x1`         | end point x      |
+| 12     | `float32` | `y1`         | end point y      |
+| 16     | `float32` | `brightness` | `0..1`           |
 
 Coordinates are in Vectrex screen space, roughly `-128..128` on both axes (see
 `Screen.cpp`). Lines are in the order the emulated beam drew them, so segments
