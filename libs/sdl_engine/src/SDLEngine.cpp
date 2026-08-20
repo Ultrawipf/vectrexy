@@ -440,14 +440,18 @@ private:
             case SDL_CONTROLLERBUTTONUP: {
                 const auto& cbutton = sdlEvent.cbutton;
                 const bool buttonDown = sdlEvent.type == SDL_CONTROLLERBUTTONDOWN;
-                m_controllerDriver.ControllerByInstanceId(sdlEvent.cbutton.which)
-                    .OnButtonStateChange(cbutton.button, buttonDown);
+                if (auto* controller =
+                        m_controllerDriver.ControllerByInstanceId(sdlEvent.cbutton.which)) {
+                    controller->OnButtonStateChange(cbutton.button, buttonDown);
+                }
             } break;
 
             case SDL_CONTROLLERAXISMOTION: {
                 const auto& caxis = sdlEvent.caxis;
-                m_controllerDriver.ControllerByInstanceId(sdlEvent.cdevice.which)
-                    .OnAxisStateChange(caxis.axis, caxis.value);
+                if (auto* controller =
+                        m_controllerDriver.ControllerByInstanceId(sdlEvent.cdevice.which)) {
+                    controller->OnAxisStateChange(caxis.axis, caxis.value);
+                }
             } break;
 
             case SDL_KEYDOWN:
@@ -875,9 +879,11 @@ private:
             togglePause = true;
         }
 
-        for (int i = 0; i < m_controllerDriver.NumControllers(); ++i) {
-            auto& controller = m_controllerDriver.ControllerByIndex(i);
-            if (controller.GetButtonState(SDL_CONTROLLER_BUTTON_START).pressed)
+        // Iterate the index range, not the count: ControllerByIndex takes a device index, and
+        // with only the second pad connected the count is 1 while the live index is 1.
+        for (int i = 0; i < SDLGameControllerDriver::MaxControllers; ++i) {
+            const auto* controller = m_controllerDriver.ControllerByIndex(i);
+            if (controller && controller->GetButtonState(SDL_CONTROLLER_BUTTON_START).pressed)
                 togglePause = true;
         }
 
@@ -900,9 +906,9 @@ private:
             m_turbo = true;
         }
 
-        for (int i = 0; i < m_controllerDriver.NumControllers(); ++i) {
-            auto& controller = m_controllerDriver.ControllerByIndex(i);
-            if (controller.GetAxisValue(SDL_CONTROLLER_AXIS_RIGHTX) > 16000)
+        for (int i = 0; i < SDLGameControllerDriver::MaxControllers; ++i) {
+            const auto* controller = m_controllerDriver.ControllerByIndex(i);
+            if (controller && controller->GetAxisValue(SDL_CONTROLLER_AXIS_RIGHTX) > 16000)
                 m_turbo = true;
         }
     }
