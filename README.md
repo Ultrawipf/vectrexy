@@ -44,6 +44,80 @@ Keyboard key bindings: ASDF + Arrow keys
 
 The Vectrex display is black & white, so to add color, each game cartridge came with a transparent colored overlay that would be slotted in front of the screen. For emulation purposes, you should be able to find png files for these overlays. If you place these png file in the `data/overlays` folder, Vectrexy will attempt to match the rom's file name to the overlay name using "fuzzy" string matching (in other words, the file names do not need to match exactly).
 
+## Laser Projector Output
+
+A Vectrex draws with a moving beam, which is also how an ILDA laser projector
+draws, so the emulator can stream its vector list to one instead of only
+rasterising it to a window. Enable it under **Settings > Laser Output**: a
+checkbox, a host and a port (default `127.0.0.1:12000`). One UDP packet is sent
+per emulated frame, containing the same line list the GL window draws, in beam
+order.
+
+This sends geometry, not points. Galvo speeds, dwells, blanking and the point
+budget are the receiver's job.
+
+### Wire format
+
+Little-endian, no padding between fields (the project targets x86/x64 only). A
+packet is a 12-byte header followed by `lineCount` 20-byte line records:
+
+| Offset | Type       | Field         | Notes                                              |
+| ------ | ---------- | ------------- | -------------------------------------------------- |
+| 0      | `uint32`   | `magic`       | `'V','L','S','R'` in that byte order (`0x52534C56`) |
+| 4      | `uint16`   | `version`     | currently `1`                                       |
+| 6      | `uint32`   | `frameNumber` | increments per packet                               |
+| 10     | `uint16`   | `lineCount`   | number of records that follow                       |
+
+Each record, repeated `lineCount` times:
+
+| Offset | Type      | Field        | Notes                                        |
+| ------ | --------- | ------------ | --------------------------------------------- |
+| 0      | `float32` | `x0`, `y0`   | start point                                   |
+| 8      | `float32` | `x1`, `y1`   | end point                                     |
+| 16     | `float32` | `brightness` | `0..1`                                        |
+
+Coordinates are in Vectrex screen space, roughly `-128..128` on both axes (see
+`Screen.cpp`). Lines are in the order the emulated beam drew them, so segments
+that share an endpoint are usually adjacent - worth exploiting, since a receiver
+can then draw a whole connected run without blanking.
+
+Because UDP has no delivery guarantee, `frameNumber` is there so a receiver can
+notice dropped or reordered packets. A packet carries at most 3000 lines to stay
+inside one datagram; anything beyond that in a frame is dropped.
+
+There is one important subtlety. The emulator frames its work by CPU cycle
+budget, not by the Vectrex's own redraw: at 60fps it runs 25,000 cycles while a
+full Vectrex redraw takes about 30,000. Those beat at 5:6, so **a single packet
+is generally a fragment of a picture rather than a whole one**, and consecutive
+packets cut the picture at different points. A receiver that treats one packet
+as one frame will see the image churn even when it is completely static. Accumulate
+packets over a window and de-duplicate repeated segments instead.
+
+### Simplified rendering
+
+Two authentic Vectrex behaviours survive rasterisation fine but do not survive a
+galvo, so **Settings > Simplified Rendering** can optionally remove them. All of
+it is off by default, and none of it changes emulation - every CPU instruction
+still executes and only the emitted line list differs.
+
+- **Text** - the BIOS font at `$F9D4`-`$FBB4` is a *bitmap* font drawn by
+  sweeping the beam and blanking it per raster row, which shreds on a laser.
+  *Stroke text* suppresses those vectors and substitutes a single-stroke vector
+  font, hooking the BIOS `Print_Str` entry at `$F495` (so it covers every BIOS
+  print routine, but not cartridges that draw their own glyphs). *Both* draws the
+  stroke font over the bitmap one, for calibration.
+- **Merge dashed lines** - the startup and Mine Storm borders are genuinely
+  drawn as dashes. This stitches near-collinear runs back into single lines,
+  with *Merge max gap* setting how far apart pieces may be.
+- **Close corners** - independent of merging. The emulated beam only draws once
+  its ramp settles, so it stops slightly short at each corner and leaves a notch.
+
+A fourth BIOS, **Laser (solid border)**, is selectable in the Bios menu. It is
+`System.bin` with 8 bytes patched so the startup logo draws a single solid
+border instead of two dashed ones, and stops pulsing (the pulse redraws the logo
+twice per frame, which doubles the text). See `tools/patch_bios_border.py`,
+which documents the patched addresses and can regenerate it.
+
 ## What's a Vectrex and why did you write this emulator?
 
 The Vectrex is a really cool and unique video game console that was released in 1982. What made it unique was that it came with its own screen and displayed vector-based graphics, rather than the typical sprite/raster based graphics of most game consoles. My uncle had gotten me a Vectrex when I was only 8 years old, and I still have it, and it's still awesome.
