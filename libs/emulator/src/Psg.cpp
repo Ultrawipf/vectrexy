@@ -30,6 +30,28 @@ namespace {
             IOPortADataStore = 14,
             IOPortBDataStore = 15
         };
+
+        // Number of bits actually implemented by each register on the AY-3-8910. Writes to the
+        // unimplemented high bits are ignored by the chip, and reads return them as 0, so we
+        // mask on write to keep every downstream value within its documented range.
+        const uint8_t WriteMask[16] = {
+            0xff, // ToneGeneratorALow    8 bits
+            0x0f, // ToneGeneratorAHigh   4 bits
+            0xff, // ToneGeneratorBLow    8 bits
+            0x0f, // ToneGeneratorBHigh   4 bits
+            0xff, // ToneGeneratorCLow    8 bits
+            0x0f, // ToneGeneratorCHigh   4 bits
+            0x1f, // NoiseGenerator       5 bits
+            0xff, // MixerControl         8 bits
+            0x1f, // AmplitudeA           5 bits
+            0x1f, // AmplitudeB           5 bits
+            0x1f, // AmplitudeC           5 bits
+            0xff, // EnvelopePeriodLow    8 bits
+            0xff, // EnvelopePeriodHigh   8 bits
+            0x0f, // EnvelopeShape        4 bits
+            0xff, // IOPortADataStore     8 bits
+            0xff, // IOPortBDataStore     8 bits
+        };
     }
 
     namespace MixerControlRegister {
@@ -120,7 +142,7 @@ namespace {
     class ToneGenerator {
     public:
         void SetPeriodHigh(uint8_t high) {
-            assert(high <= 0xff); // Only 8 bits should be set
+            assert(high <= 0x0f); // Only the low 4 bits are implemented
             m_period = (high << 8) | (m_period & 0x00ff);
             OnPeriodUpdated();
         }
@@ -678,6 +700,11 @@ uint8_t PsgImpl::Read(uint16_t address) {
 }
 
 void PsgImpl::Write(uint16_t address, uint8_t value) {
+    // Drop the bits the chip does not implement. Games routinely write raw 8-bit values to the
+    // narrow registers -- Bedlam writes $ff to the 5-bit noise period, Scramble and Spike write
+    // $ff to the 4-bit tone period high bytes -- and real hardware simply truncates them.
+    value &= Register::WriteMask[address & 0xf];
+
     switch (m_latchedAddress) {
     case Register::ToneGeneratorALow:
         return m_toneGenerators[0].SetPeriodLow(value);
