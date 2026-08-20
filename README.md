@@ -87,6 +87,15 @@ Because UDP has no delivery guarantee, `frameNumber` is there so a receiver can
 notice dropped or reordered packets. A packet carries at most 3000 lines to stay
 inside one datagram; anything beyond that in a frame is dropped.
 
+`frameNumber` counts from zero per emulator *process*, not per session, so it
+**resets whenever the emulator is restarted**. A receiver that rejects packets
+numbered below the highest one it has seen - the natural way to discard
+reordered packets - will therefore discard everything a restarted emulator
+sends, until the new counter climbs back past where the old one stopped. Treat a
+large backward jump, or any backward jump after a gap in the stream, as a new
+sender rather than as reordering, and discard whatever is still buffered from
+the previous one.
+
 There is one important subtlety. The emulator frames its work by CPU cycle
 budget, not by the Vectrex's own redraw: at 60fps it runs 25,000 cycles while a
 full Vectrex redraw takes about 30,000. Those beat at 5:6, so **a single packet
